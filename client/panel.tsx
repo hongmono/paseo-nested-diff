@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { type PluginWorkspacePanelProps, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { type DiffFile, type RepoDiff, filePatchRpc, worktreeDiffRpc } from "../shared/diff";
 
@@ -138,7 +138,17 @@ function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compa
   );
 }
 
-export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId">) {
+function DiffBody({ embedded, style, children }: { embedded: boolean; style: { padding: number; gap: number }; children: ReactNode }) {
+  if (embedded) return <View style={style}>{children}</View>;
+  return <ScrollView contentContainerStyle={style}>{children}</ScrollView>;
+}
+
+export function WorktreeDiffPanel({
+  theme,
+  layout,
+  workspaceId,
+  embedded = false,
+}: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId"> & { embedded?: boolean }) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const [width, setWidth] = useState(0);
   const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
@@ -161,7 +171,7 @@ export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWor
 
   const padding = compact ? 10 : 16;
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+    <View style={{ flex: embedded ? undefined : 1, backgroundColor: theme.colors.surface0 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <View
         style={{
           flexDirection: "row",
@@ -190,7 +200,7 @@ export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWor
           <Text style={{ color: theme.colors.accentForeground, fontSize: 13 }}>{summary.isFetching ? "Loading…" : "Refresh"}</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={{ padding, gap: compact ? 10 : 12 }}>
+      <DiffBody embedded={embedded} style={{ padding, gap: compact ? 10 : 12 }}>
         {!directory ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading workspace…</Text> : null}
         {summary.error ? <Text style={{ color: theme.colors.statusDanger }}>{summary.error.message}</Text> : null}
         {summary.data && summary.data.repos.length === 0 ? (
@@ -199,7 +209,7 @@ export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWor
         {summary.data?.repos.map((repo) => (
           <RepoSection key={repo.path} theme={theme} compact={compact} root={summary.data.root} repo={repo} />
         ))}
-      </ScrollView>
+      </DiffBody>
     </View>
   );
 }

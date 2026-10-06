@@ -1,6 +1,6 @@
 import type { PluginButtonBehavior, PluginButtonContentProps, PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import { createElement } from "react";
-import { Dimensions, Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { WorktreeDiffPanel } from "./panel";
 
 export const PANEL_ID = "worktree-diff";
@@ -10,11 +10,7 @@ export function openInExplorer(client: PluginClientContext, workspaceId: string)
 }
 
 function DiffSheet({ theme, layout, workspaceId }: PluginButtonContentProps) {
-  return createElement(
-    View,
-    { style: { height: Math.round(Dimensions.get("window").height * 0.75) } },
-    createElement(WorktreeDiffPanel, { theme, layout, workspaceId }),
-  );
+  return createElement(WorktreeDiffPanel, { theme, layout, workspaceId, embedded: true });
 }
 
 function pillBehavior(client: PluginClientContext, workspaceId: string): PluginButtonBehavior {
