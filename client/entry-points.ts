@@ -1,9 +1,11 @@
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
+import { Platform } from "react-native";
 
 export const PANEL_ID = "worktree-diff";
 
 export function openInExplorer(client: PluginClientContext, workspaceId: string) {
-  client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
+  if (Platform.OS === "web") client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
+  else client.openPanel(PANEL_ID, { workspaceId });
 }
 
 // One "Diff" pill per agent composer, following the agent directory through an owned list subscription.
