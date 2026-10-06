@@ -1,88 +1,68 @@
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 
 export const PANEL_ID = "worktree-diff";
-const TITLE = "Worktree Diff";
-const ICON = "FileDiff";
 
-function openFor(client: PluginClientContext, workspaceId: string) {
-  client.openPanel(PANEL_ID, { workspaceId });
+export function openInExplorer(client: PluginClientContext, workspaceId: string) {
+  client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
 }
 
-// The Command Center is desktop-only, so mobile reaches the panel through a header button and `/diff`.
-export function contributeEntryPoints(client: PluginClientContext): () => void {
-  const buttons = new Map<string, PluginButtonRegistration>();
+// One "Diff" pill per agent composer, following the agent directory through an owned list subscription.
+export function contributeComposerPills(client: PluginClientContext): () => void {
+  const pills = new Map<string, PluginButtonRegistration>();
+  const lifetime = new AbortController();
   let stopped = false;
-  let releaseWorkspaces: (() => void) | null = null;
 
-  const register = (workspaceId: string) => {
-    if (stopped || buttons.has(workspaceId)) return;
-    buttons.set(
-      workspaceId,
-      client.addHeaderButton({
-        id: "open-worktree-diff",
+  const register = (agent: { id: string; workspaceId?: string | null }) => {
+    if (stopped || !agent.workspaceId) return;
+    pills.get(agent.id)?.remove();
+    const workspaceId = agent.workspaceId;
+    pills.set(
+      agent.id,
+      client.addComposerPill({
+        id: "open-nested-diff",
         workspaceId,
+        agentId: agent.id,
         button: {
-          title: TITLE,
-          icon: ICON,
+          title: "Open Nested Diff",
+          icon: "FileDiff",
           label: "Diff",
-          behavior: { kind: "action", onPress: () => openFor(client, workspaceId) },
+          behavior: { kind: "action", onPress: () => openInExplorer(client, workspaceId) },
         },
       }),
     );
   };
-  const unregister = (workspaceId: string) => {
-    buttons.get(workspaceId)?.remove();
-    buttons.delete(workspaceId);
+  const unregister = (agentId: string) => {
+    pills.get(agentId)?.remove();
+    pills.delete(agentId);
+  };
+  const clear = () => {
+    for (const pill of pills.values()) pill.remove();
+    pills.clear();
   };
 
-  void client.paseo.workspaces
-    .list({ subscribe: {} })
+  void client.paseo.agents
+    .list({ subscribe: {}, signal: lifetime.signal })
     .then(({ subscription }) => {
-      const release = () => {
-        unsubscribe();
-        void subscription.release();
-      };
-      const unsubscribe = subscription.subscribe({
+      subscription.subscribe({
         snapshot: ({ entries }) => {
-          const live = new Set(entries.map((workspace) => workspace.id));
-          for (const id of [...buttons.keys()]) if (!live.has(id)) unregister(id);
-          for (const id of live) register(id);
+          clear();
+          for (const { agent } of entries) register(agent);
         },
         update: (message) => {
-          if (message.type !== "workspace_update") return;
+          if (message.type !== "agent_update") return;
           const update = message.payload;
-          if (update.kind === "remove") unregister(update.id);
-          else register(update.workspace.id);
+          if (update.kind === "remove") unregister(update.agentId);
+          else register(update.agent);
         },
       });
-      if (stopped) release();
-      else releaseWorkspaces = release;
     })
     .catch((error: unknown) => {
-      if (!stopped) console.error("[paseo-nested-diff] workspace observation failed", error);
+      if (!stopped) console.error("[paseo-nested-diff] agent observation failed", error);
     });
-
-  const removeWorkspaceCommand = client.addSlashCommand({
-    name: "diff",
-    description: "Open the final diff across this workspace and its nested repos",
-    argumentHint: "",
-    context: "workspace",
-    onSubmit: ({ workspace }) => openFor(client, workspace.id),
-  });
-  const removeAgentCommand = client.addSlashCommand({
-    name: "diff",
-    description: "Open the final diff across this workspace and its nested repos",
-    argumentHint: "",
-    context: "agent",
-    onSubmit: ({ workspace }) => openFor(client, workspace.id),
-  });
 
   return () => {
     stopped = true;
-    releaseWorkspaces?.();
-    for (const button of buttons.values()) button.remove();
-    buttons.clear();
-    removeWorkspaceCommand();
-    removeAgentCommand();
+    lifetime.abort();
+    clear();
   };
 }

@@ -1,13 +1,14 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { PANEL_ID, contributeEntryPoints } from "./client/entry-points";
+import { PANEL_ID, contributeComposerPills } from "./client/entry-points";
 import { WorktreeDiffPanel } from "./client/panel";
 
 export default function contribute(client: PluginClientContext) {
   client.addWorkspacePanel({
     id: PANEL_ID,
-    title: "Worktree Diff",
+    title: "Nested Diff",
     icon: "FileDiff",
     context: "workspace",
+    locations: ["workspace", "explorer"],
     Component: WorktreeDiffPanel,
   });
 
@@ -18,9 +19,9 @@ export default function contribute(client: PluginClientContext) {
     keywords: ["diff", "git", "changes", "worktree", "nested", "merge-base"],
     context: "workspace",
     onSelect({ openPanel }) {
-      openPanel(PANEL_ID);
+      openPanel(PANEL_ID, { location: "explorer" });
     },
   });
 
-  return contributeEntryPoints(client);
+  return contributeComposerPills(client);
 }

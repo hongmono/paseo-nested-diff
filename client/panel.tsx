@@ -7,6 +7,8 @@ import { type DiffFile, type RepoDiff, filePatchRpc, worktreeDiffRpc } from "../
 
 const MONOSPACE = Platform.select({ ios: "Menlo", macos: "Menlo", default: "monospace" });
 const QUERY_ROOT = "nested-diff";
+// The Explorer is narrow on desktop too, where layout.compact stays false.
+const NARROW_WIDTH = 480;
 
 function withAlpha(color: string, alpha: string, fallback = "transparent"): string {
   return /^#(?:[0-9a-f]{6})$/i.test(color.trim()) ? `${color.trim()}${alpha}` : fallback;
@@ -114,13 +116,14 @@ function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compa
     <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, overflow: "hidden", backgroundColor: theme.colors.surface0 }}>
       <View style={{ padding: compact ? 10 : 12, gap: 4, backgroundColor: theme.colors.surface1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Text style={{ color: theme.colors.foreground, fontSize: 14, fontWeight: "600" }}>{repo.name}</Text>
-          <Text numberOfLines={1} style={[muted, { flexShrink: 1 }]}>{repo.branch ?? "no branch"}</Text>
+          <Text numberOfLines={1} style={{ color: theme.colors.foreground, fontSize: 14, fontWeight: "600", flexShrink: 1 }}>{repo.name}</Text>
+          {compact ? null : <Text numberOfLines={1} style={[muted, { flexShrink: 1 }]}>{repo.branch ?? "no branch"}</Text>}
           <View style={{ flex: 1 }} />
           <Counts theme={theme} additions={repo.additions} deletions={repo.deletions} />
           <Text style={muted}>{repo.files.length} {repo.files.length === 1 ? "file" : "files"}</Text>
         </View>
-        <Text style={[muted, { fontFamily: MONOSPACE, fontSize: 11 }]}>
+        {compact ? <Text numberOfLines={1} style={muted}>{repo.branch ?? "no branch"}</Text> : null}
+        <Text numberOfLines={1} style={[muted, { fontFamily: MONOSPACE, fontSize: 11 }]}>
           base {repo.base ?? "—"}{repo.mergeBase ? ` @ ${repo.mergeBase.slice(0, 10)}` : ""}
         </Text>
         {repo.error ? <Text style={{ color: theme.colors.statusDanger, fontSize: 12 }}>{repo.error}</Text> : null}
@@ -137,7 +140,8 @@ function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compa
 
 export function WorktreeDiffPanel({ theme, layout, workspaceId }: PluginWorkspacePanelProps) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
-  const compact = layout.compact;
+  const [width, setWidth] = useState(0);
+  const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
   const callSummary = useRpc(worktreeDiffRpc);
   const queryClient = useQueryClient();
   const summary = useQuery({
@@ -157,7 +161,7 @@ export function WorktreeDiffPanel({ theme, layout, workspaceId }: PluginWorkspac
 
   const padding = compact ? 10 : 16;
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <View
         style={{
           flexDirection: "row",
