@@ -3,7 +3,7 @@ import { type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { WorktreeDiffPanel } from "./panel";
+import { DiffView } from "./panel";
 
 export const SURFACE_ID = "nested-diff";
 const WORKSPACES_KEY = ["nested-diff", "workspaces"] as const;
@@ -172,7 +172,7 @@ export function NestedDiffSurface({ theme, layout }: PluginSurfaceProps) {
     />
   );
   const diff = selected ? (
-    <WorktreeDiffPanel key={selected.id} theme={theme} layout={layout} workspaceId={selected.id} directory={selected.directory} />
+    <DiffView key={selected.id} theme={theme} layout={layout} directory={selected.directory} />
   ) : (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
       <Text style={{ color: theme.colors.foregroundMuted }}>Pick a worktree to see its final diff.</Text>

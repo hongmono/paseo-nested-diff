@@ -142,14 +142,16 @@ function RepoSection({ theme, compact, wrap, root, repo }: { theme: PluginTheme;
   );
 }
 
-export function WorktreeDiffPanel({
+export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId">) {
+  const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
+  return <DiffView theme={theme} layout={layout} directory={directory ?? null} />;
+}
+
+export function DiffView({
   theme,
   layout,
-  workspaceId,
-  directory: directoryOverride,
-}: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId"> & { directory?: string }) {
-  const cachedDirectory = useWorkspace(workspaceId, (workspace) => workspace.directory);
-  const directory = directoryOverride ?? cachedDirectory;
+  directory,
+}: Pick<PluginWorkspacePanelProps, "theme" | "layout"> & { directory: string | null }) {
   const [wrap, setWrap] = useState(false);
   const [width, setWidth] = useState(0);
   const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
