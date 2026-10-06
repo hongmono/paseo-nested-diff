@@ -7,6 +7,7 @@ import { type DiffFile, type RepoDiff, filePatchRpc, worktreeDiffRpc } from "../
 
 const MONOSPACE = Platform.select({ ios: "Menlo", macos: "Menlo", default: "monospace" });
 const QUERY_ROOT = "nested-diff";
+export const summaryQueryKey = (directory: string | null) => [QUERY_ROOT, "summary", directory] as const;
 // The Explorer is narrow on desktop too, where layout.compact stays false.
 const NARROW_WIDTH = 480;
 
@@ -158,7 +159,7 @@ export function DiffView({
   const callSummary = useRpc(worktreeDiffRpc);
   const queryClient = useQueryClient();
   const summary = useQuery({
-    queryKey: [QUERY_ROOT, "summary", directory],
+    queryKey: summaryQueryKey(directory),
     queryFn: () => callSummary({ root: directory! }),
     enabled: Boolean(directory),
   });

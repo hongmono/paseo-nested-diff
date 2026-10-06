@@ -1,9 +1,10 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type PluginSurfaceProps, usePaseo, useRpc } from "@getpaseo/plugin/client";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { DiffView } from "./panel";
+import { worktreeDiffRpc } from "../shared/diff";
+import { DiffView, summaryQueryKey } from "./panel";
 
 export const SURFACE_ID = "nested-diff";
 const WORKSPACES_KEY = ["nested-diff", "workspaces"] as const;
@@ -16,6 +17,7 @@ interface WorktreeItem {
   directory: string;
   project: string;
   changed: boolean;
+  files: number | null;
   additions: number;
   deletions: number;
   activityAt: string;
@@ -34,17 +36,16 @@ type ListedWorkspace = Awaited<ReturnType<ReturnType<typeof usePaseo>["workspace
 function toItem(workspace: ListedWorkspace): WorktreeItem | null {
   if (workspace.archivingAt) return null;
   const directory = workspace.workspaceDirectory ?? workspace.projectRootPath;
-  const additions = workspace.diffStat?.additions ?? 0;
-  const deletions = workspace.diffStat?.deletions ?? 0;
   return {
     id: workspace.id,
     title: workspace.title || workspace.name,
     branch: workspace.gitRuntime?.currentBranch ?? null,
     directory,
     project: workspace.projectCustomName || workspace.projectDisplayName,
-    changed: additions + deletions > 0 || workspace.gitRuntime?.isDirty === true,
-    additions,
-    deletions,
+    changed: false,
+    files: null,
+    additions: 0,
+    deletions: 0,
     activityAt: workspace.activityAt ?? workspace.statusEnteredAt ?? "",
   };
 }
@@ -80,13 +81,18 @@ function WorktreeRow({ theme, item, selected, onPress }: { theme: PluginTheme; i
         <Text numberOfLines={1} style={{ flex: 1, color: theme.colors.foreground, fontSize: 14 }}>
           {item.title}
         </Text>
-        {item.additions + item.deletions > 0 ? (
+        {item.files === null ? (
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>…</Text>
+        ) : item.files === 0 ? (
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>no changes</Text>
+        ) : (
           <Text style={{ fontSize: 12 }}>
+            <Text style={{ color: theme.colors.foregroundMuted }}>{item.files} files </Text>
             <Text style={{ color: theme.colors.statusSuccess }}>+{item.additions}</Text>
             <Text style={{ color: theme.colors.foregroundMuted }}> </Text>
             <Text style={{ color: theme.colors.statusDanger }}>-{item.deletions}</Text>
           </Text>
-        ) : null}
+        )}
       </View>
       <Text numberOfLines={1} style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
         {item.branch ?? "no branch"}
@@ -151,8 +157,28 @@ export function NestedDiffSurface({ theme, layout }: PluginSurfaceProps) {
   });
   useEffect(() => paseo.workspaces.subscribe(() => void queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY })), [paseo, queryClient]);
 
-  const items = useMemo(() => (workspaces.data ?? []).map(toItem).filter((item): item is WorktreeItem => item !== null), [workspaces.data]);
-  const groups = useMemo(() => groupByProject(items), [items]);
+  const baseItems = useMemo(() => (workspaces.data ?? []).map(toItem).filter((item): item is WorktreeItem => item !== null), [workspaces.data]);
+  const callSummary = useRpc(worktreeDiffRpc);
+  const summaries = useQueries({
+    queries: baseItems.map((item) => ({
+      queryKey: summaryQueryKey(item.directory),
+      queryFn: () => callSummary({ root: item.directory }),
+      staleTime: 30_000,
+    })),
+  });
+  const items = baseItems.map((item, index): WorktreeItem => {
+    const repos = summaries[index]?.data?.repos;
+    if (!repos) return item;
+    const files = repos.reduce((sum, repo) => sum + repo.files.length, 0);
+    return {
+      ...item,
+      files,
+      changed: files > 0,
+      additions: repos.reduce((sum, repo) => sum + repo.additions, 0),
+      deletions: repos.reduce((sum, repo) => sum + repo.deletions, 0),
+    };
+  });
+  const groups = groupByProject(items);
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
   const select = (id: string | null) => {
