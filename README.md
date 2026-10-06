@@ -37,11 +37,10 @@ Plugins are trusted, unsandboxed code — read the source before installing.
 
 ## Usage
 
-Open a workspace, then use either entry point. Both work on desktop and mobile.
-
-- **Explorer tab**: open the right-side Explorer and pick the **Nested Diff** tab, next to Files and Changes.
-- **Composer button**: tap **Diff** in the row above the message composer (next to Tasks and Subagents). On desktop and web it opens the Nested Diff tab in the Explorer; in the iOS/Android app it opens the diff in a bottom sheet.
-- **Desktop shortcut**: press **⌘K** (Ctrl+K on Windows/Linux) and choose **Open Worktree Diff**.
+- **Sidebar (mobile and desktop)**: open **Nested Diff** in the app sidebar and pick a worktree. Worktrees are grouped by project; ones with changes and recent activity come first. On a phone, use **‹ Worktrees** to go back; on a wide window the list and the diff sit side by side. **Wrap** wraps long lines instead of scrolling sideways.
+- **Explorer tab (desktop)**: open the right-side Explorer and pick the **Nested Diff** tab, next to Files and Changes.
+- **Composer button (desktop)**: click **Diff** above the message composer to open the Nested Diff tab in the Explorer.
+- **Shortcut (desktop)**: press **⌘K** (Ctrl+K on Windows/Linux) and choose **Open Worktree Diff**.
 
 ## Development
 

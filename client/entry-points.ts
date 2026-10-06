@@ -1,7 +1,5 @@
-import type { PluginButtonBehavior, PluginButtonContentProps, PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
-import { createElement } from "react";
+import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import { Platform } from "react-native";
-import { WorktreeDiffPanel } from "./panel";
 
 export const PANEL_ID = "worktree-diff";
 
@@ -9,28 +7,29 @@ export function openInExplorer(client: PluginClientContext, workspaceId: string)
   client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
 }
 
-function DiffSheet({ theme, layout, workspaceId }: PluginButtonContentProps) {
-  return createElement(WorktreeDiffPanel, { theme, layout, workspaceId, embedded: true });
+interface Pill {
+  workspaceId: string;
+  registration: PluginButtonRegistration;
 }
 
-function pillBehavior(client: PluginClientContext, workspaceId: string): PluginButtonBehavior {
-  if (Platform.OS === "web") return { kind: "action", onPress: () => openInExplorer(client, workspaceId) };
-  return { kind: "popover", Content: DiffSheet };
-}
-
-// One "Diff" pill per agent composer, following the agent directory through an owned list subscription.
+// Desktop/web only: one "Diff" pill per agent composer. Native uses the sidebar surface instead.
+// Pills are reconciled, never re-added for an agent that already has one, because removing or
+// updating a button closes whatever it has open.
 export function contributeComposerPills(client: PluginClientContext): () => void {
-  const pills = new Map<string, PluginButtonRegistration>();
+  if (Platform.OS !== "web") return () => {};
+  const pills = new Map<string, Pill>();
   const lifetime = new AbortController();
   let stopped = false;
 
-  const register = (agent: { id: string; workspaceId?: string | null }) => {
+  const ensure = (agent: { id: string; workspaceId?: string | null }) => {
     if (stopped || !agent.workspaceId) return;
-    pills.get(agent.id)?.remove();
     const workspaceId = agent.workspaceId;
-    pills.set(
-      agent.id,
-      client.addComposerPill({
+    const existing = pills.get(agent.id);
+    if (existing?.workspaceId === workspaceId) return;
+    existing?.registration.remove();
+    pills.set(agent.id, {
+      workspaceId,
+      registration: client.addComposerPill({
         id: "open-nested-diff",
         workspaceId,
         agentId: agent.id,
@@ -38,18 +37,14 @@ export function contributeComposerPills(client: PluginClientContext): () => void
           title: "Open Nested Diff",
           icon: "FileDiff",
           label: "Diff",
-          behavior: pillBehavior(client, workspaceId),
+          behavior: { kind: "action", onPress: () => openInExplorer(client, workspaceId) },
         },
       }),
-    );
+    });
   };
-  const unregister = (agentId: string) => {
-    pills.get(agentId)?.remove();
+  const drop = (agentId: string) => {
+    pills.get(agentId)?.registration.remove();
     pills.delete(agentId);
-  };
-  const clear = () => {
-    for (const pill of pills.values()) pill.remove();
-    pills.clear();
   };
 
   void client.paseo.agents
@@ -57,14 +52,15 @@ export function contributeComposerPills(client: PluginClientContext): () => void
     .then(({ subscription }) => {
       subscription.subscribe({
         snapshot: ({ entries }) => {
-          clear();
-          for (const { agent } of entries) register(agent);
+          const live = new Set(entries.map(({ agent }) => agent.id));
+          for (const agentId of [...pills.keys()]) if (!live.has(agentId)) drop(agentId);
+          for (const { agent } of entries) ensure(agent);
         },
         update: (message) => {
           if (message.type !== "agent_update") return;
           const update = message.payload;
-          if (update.kind === "remove") unregister(update.agentId);
-          else register(update.agent);
+          if (update.kind === "remove") drop(update.agentId);
+          else ensure(update.agent);
         },
       });
     })
@@ -75,6 +71,6 @@ export function contributeComposerPills(client: PluginClientContext): () => void
   return () => {
     stopped = true;
     lifetime.abort();
-    clear();
+    for (const agentId of [...pills.keys()]) drop(agentId);
   };
 }

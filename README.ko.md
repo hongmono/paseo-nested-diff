@@ -37,11 +37,10 @@ paseo plugin ls   # paseo-nested-diff가 "running"이면 정상
 
 ## 사용법
 
-워크스페이스를 열고 아래 방법 중 하나를 쓰면 됩니다. 둘 다 데스크톱과 모바일에서 동작합니다.
-
-- **Explorer 탭**: 오른쪽 Explorer를 열고 Files·Changes 옆의 **Nested Diff** 탭을 고릅니다.
-- **입력창 버튼**: 메시지 입력창 위 줄(Tasks·Subagents 옆)의 **Diff**를 누르면 데스크톱·웹에서는 Explorer의 Nested Diff 탭이, iOS/Android 앱에서는 아래에서 올라오는 시트로 diff가 열립니다.
-- **데스크톱 단축키**: **⌘K**(Windows/Linux는 Ctrl+K)를 누르고 **Open Worktree Diff**를 선택합니다.
+- **사이드바 (모바일·데스크톱)**: 앱 사이드바에서 **Nested Diff**를 열고 워크트리를 고릅니다. 프로젝트별로 묶여 있고, 변경이 있거나 최근 활동한 워크트리가 위에 옵니다. 휴대폰에서는 **‹ Worktrees**로 목록에 돌아가고, 넓은 창에서는 목록과 diff가 나란히 보입니다. **Wrap**을 켜면 긴 줄을 옆으로 스크롤하지 않고 줄바꿈해서 봅니다.
+- **Explorer 탭 (데스크톱)**: 오른쪽 Explorer를 열고 Files·Changes 옆의 **Nested Diff** 탭을 고릅니다.
+- **입력창 버튼 (데스크톱)**: 메시지 입력창 위의 **Diff**를 누르면 Explorer의 Nested Diff 탭이 열립니다.
+- **단축키 (데스크톱)**: **⌘K**(Windows/Linux는 Ctrl+K)를 누르고 **Open Worktree Diff**를 선택합니다.
 
 ## 개발
 

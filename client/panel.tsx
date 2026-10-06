@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { type PluginWorkspacePanelProps, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { type DiffFile, type RepoDiff, filePatchRpc, worktreeDiffRpc } from "../shared/diff";
 
@@ -44,7 +44,7 @@ function Counts({ theme, additions, deletions }: { theme: PluginTheme; additions
   );
 }
 
-function PatchView({ theme, root, repoPath, file }: { theme: PluginTheme; root: string; repoPath: string; file: DiffFile }) {
+function PatchView({ theme, root, repoPath, file, wrap }: { theme: PluginTheme; root: string; repoPath: string; file: DiffFile; wrap: boolean }) {
   const callPatch = useRpc(filePatchRpc);
   const query = useQuery({
     queryKey: [QUERY_ROOT, "patch", root, repoPath, file.path],
@@ -54,8 +54,7 @@ function PatchView({ theme, root, repoPath, file }: { theme: PluginTheme; root: 
   if (query.error) return <Text style={{ color: theme.colors.statusDanger, fontSize: 12, padding: 8 }}>{query.error.message}</Text>;
   if (query.data.binary) return <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, padding: 8 }}>Binary file.</Text>;
   const lines = query.data.patch.split("\n");
-  return (
-    <ScrollView horizontal style={{ backgroundColor: theme.colors.surface1 }}>
+  const body = (
       <View style={{ paddingVertical: 6, minWidth: "100%" }}>
         {lines.map((line, index) => {
           let color = theme.colors.foreground;
@@ -84,11 +83,16 @@ function PatchView({ theme, root, repoPath, file }: { theme: PluginTheme; root: 
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, paddingHorizontal: 8 }}>… diff truncated</Text>
         ) : null}
       </View>
+  );
+  if (wrap) return <View style={{ backgroundColor: theme.colors.surface1 }}>{body}</View>;
+  return (
+    <ScrollView horizontal nestedScrollEnabled style={{ backgroundColor: theme.colors.surface1 }}>
+      {body}
     </ScrollView>
   );
 }
 
-function FileRow({ theme, compact, root, repoPath, file }: { theme: PluginTheme; compact: boolean; root: string; repoPath: string; file: DiffFile }) {
+function FileRow({ theme, compact, wrap, root, repoPath, file }: { theme: PluginTheme; compact: boolean; wrap: boolean; root: string; repoPath: string; file: DiffFile }) {
   const [open, setOpen] = useState(false);
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: theme.colors.border }}>
@@ -105,12 +109,12 @@ function FileRow({ theme, compact, root, repoPath, file }: { theme: PluginTheme;
         </Text>
         <Counts theme={theme} additions={file.additions} deletions={file.deletions} />
       </Pressable>
-      {open ? <PatchView theme={theme} root={root} repoPath={repoPath} file={file} /> : null}
+      {open ? <PatchView theme={theme} root={root} repoPath={repoPath} file={file} wrap={wrap} /> : null}
     </View>
   );
 }
 
-function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compact: boolean; root: string; repo: RepoDiff }) {
+function RepoSection({ theme, compact, wrap, root, repo }: { theme: PluginTheme; compact: boolean; wrap: boolean; root: string; repo: RepoDiff }) {
   const muted = { color: theme.colors.foregroundMuted, fontSize: 12 } as const;
   return (
     <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, overflow: "hidden", backgroundColor: theme.colors.surface0 }}>
@@ -132,24 +136,21 @@ function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compa
         <Text style={[muted, { paddingHorizontal: compact ? 10 : 12, paddingVertical: 8 }]}>No changes</Text>
       ) : null}
       {repo.files.map((file) => (
-        <FileRow key={file.path} theme={theme} compact={compact} root={root} repoPath={repo.path} file={file} />
+        <FileRow key={file.path} theme={theme} compact={compact} wrap={wrap} root={root} repoPath={repo.path} file={file} />
       ))}
     </View>
   );
-}
-
-function DiffBody({ embedded, style, children }: { embedded: boolean; style: { padding: number; gap: number }; children: ReactNode }) {
-  if (embedded) return <View style={style}>{children}</View>;
-  return <ScrollView contentContainerStyle={style}>{children}</ScrollView>;
 }
 
 export function WorktreeDiffPanel({
   theme,
   layout,
   workspaceId,
-  embedded = false,
-}: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId"> & { embedded?: boolean }) {
-  const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
+  directory: directoryOverride,
+}: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId"> & { directory?: string }) {
+  const cachedDirectory = useWorkspace(workspaceId, (workspace) => workspace.directory);
+  const directory = directoryOverride ?? cachedDirectory;
+  const [wrap, setWrap] = useState(false);
   const [width, setWidth] = useState(0);
   const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
   const callSummary = useRpc(worktreeDiffRpc);
@@ -171,7 +172,7 @@ export function WorktreeDiffPanel({
 
   const padding = compact ? 10 : 16;
   return (
-    <View style={{ flex: embedded ? undefined : 1, backgroundColor: theme.colors.surface0 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <View
         style={{
           flexDirection: "row",
@@ -191,6 +192,15 @@ export function WorktreeDiffPanel({
           </Text>
         </View>
         <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: wrap }}
+          accessibilityLabel="Wrap long lines"
+          onPress={() => setWrap((value) => !value)}
+          style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: wrap ? theme.colors.accent : theme.colors.border }}
+        >
+          <Text style={{ color: wrap ? theme.colors.accent : theme.colors.foregroundMuted, fontSize: 13 }}>Wrap</Text>
+        </Pressable>
+        <Pressable
           accessibilityRole="button"
           accessibilityLabel="Refresh diff"
           disabled={summary.isFetching}
@@ -200,16 +210,16 @@ export function WorktreeDiffPanel({
           <Text style={{ color: theme.colors.accentForeground, fontSize: 13 }}>{summary.isFetching ? "Loading…" : "Refresh"}</Text>
         </Pressable>
       </View>
-      <DiffBody embedded={embedded} style={{ padding, gap: compact ? 10 : 12 }}>
+      <ScrollView directionalLockEnabled nestedScrollEnabled contentContainerStyle={{ padding, gap: compact ? 10 : 12 }}>
         {!directory ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading workspace…</Text> : null}
         {summary.error ? <Text style={{ color: theme.colors.statusDanger }}>{summary.error.message}</Text> : null}
         {summary.data && summary.data.repos.length === 0 ? (
           <Text style={{ color: theme.colors.foregroundMuted }}>This workspace is not inside a git repository.</Text>
         ) : null}
         {summary.data?.repos.map((repo) => (
-          <RepoSection key={repo.path} theme={theme} compact={compact} root={summary.data.root} repo={repo} />
+          <RepoSection key={repo.path} theme={theme} compact={compact} wrap={wrap} root={summary.data.root} repo={repo} />
         ))}
-      </DiffBody>
+      </ScrollView>
     </View>
   );
 }
