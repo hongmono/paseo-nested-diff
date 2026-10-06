@@ -37,7 +37,11 @@ Plugins are trusted, unsandboxed code — read the source before installing.
 
 ## Usage
 
-Open a workspace, press **⌘K** (Ctrl+K on Windows/Linux) and choose **Open Worktree Diff**. The panel opens as a workspace tab.
+Open a workspace, then use any of these. The panel opens as a workspace tab.
+
+- **Desktop**: press **⌘K** (Ctrl+K on Windows/Linux) and choose **Open Worktree Diff**.
+- **Header button**: tap **Diff** (file-diff icon) in the workspace header. On narrow screens it is icon-only or inside the header's overflow menu.
+- **Slash command**: type `/diff` in the message composer and send it. Nothing is sent to the agent. This works on mobile too.
 
 ## Development
 
