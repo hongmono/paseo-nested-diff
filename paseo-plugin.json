@@ -1,0 +1,7 @@
+{
+  "id": "paseo-nested-diff",
+  "description": "Final combined diff (merge-base vs working tree) for the workspace repo and its nested repositories",
+  "requirements": {
+    "paseo": ">=0.10.2"
+  }
+}
