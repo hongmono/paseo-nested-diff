@@ -40,7 +40,7 @@ Plugins are trusted, unsandboxed code — read the source before installing.
 Open a workspace, then use either entry point. Both work on desktop and mobile.
 
 - **Explorer tab**: open the right-side Explorer and pick the **Nested Diff** tab, next to Files and Changes.
-- **Composer button**: tap **Diff** in the row above the message composer (next to Tasks and Subagents). It opens the Nested Diff tab in the Explorer.
+- **Composer button**: tap **Diff** in the row above the message composer (next to Tasks and Subagents). On desktop and web it opens the Nested Diff tab in the Explorer; in the iOS/Android app it opens the diff in a bottom sheet.
 - **Desktop shortcut**: press **⌘K** (Ctrl+K on Windows/Linux) and choose **Open Worktree Diff**.
 
 ## Development

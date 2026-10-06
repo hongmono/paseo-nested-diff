@@ -1,11 +1,25 @@
-import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
-import { Platform } from "react-native";
+import type { PluginButtonBehavior, PluginButtonContentProps, PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
+import { createElement } from "react";
+import { Dimensions, Platform, View } from "react-native";
+import { WorktreeDiffPanel } from "./panel";
 
 export const PANEL_ID = "worktree-diff";
 
 export function openInExplorer(client: PluginClientContext, workspaceId: string) {
-  if (Platform.OS === "web") client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
-  else client.openPanel(PANEL_ID, { workspaceId });
+  client.openPanel(PANEL_ID, { workspaceId, location: "explorer" });
+}
+
+function DiffSheet({ theme, layout, workspaceId }: PluginButtonContentProps) {
+  return createElement(
+    View,
+    { style: { height: Math.round(Dimensions.get("window").height * 0.75) } },
+    createElement(WorktreeDiffPanel, { theme, layout, workspaceId }),
+  );
+}
+
+function pillBehavior(client: PluginClientContext, workspaceId: string): PluginButtonBehavior {
+  if (Platform.OS === "web") return { kind: "action", onPress: () => openInExplorer(client, workspaceId) };
+  return { kind: "popover", Content: DiffSheet };
 }
 
 // One "Diff" pill per agent composer, following the agent directory through an owned list subscription.
@@ -28,7 +42,7 @@ export function contributeComposerPills(client: PluginClientContext): () => void
           title: "Open Nested Diff",
           icon: "FileDiff",
           label: "Diff",
-          behavior: { kind: "action", onPress: () => openInExplorer(client, workspaceId) },
+          behavior: pillBehavior(client, workspaceId),
         },
       }),
     );

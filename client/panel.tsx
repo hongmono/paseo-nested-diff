@@ -138,7 +138,7 @@ function RepoSection({ theme, compact, root, repo }: { theme: PluginTheme; compa
   );
 }
 
-export function WorktreeDiffPanel({ theme, layout, workspaceId }: PluginWorkspacePanelProps) {
+export function WorktreeDiffPanel({ theme, layout, workspaceId }: Pick<PluginWorkspacePanelProps, "theme" | "layout" | "workspaceId">) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const [width, setWidth] = useState(0);
   const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
