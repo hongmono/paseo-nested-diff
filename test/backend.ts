@@ -9,7 +9,8 @@ process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = "test";
 process.env.GIT_AUTHOR_EMAIL = process.env.GIT_COMMITTER_EMAIL = "test@example.com";
 
-const { readFilePatch, readWorktreeDiff } = await import("../server/diff");
+const { readFilePatch, readWorktreeCommits, readWorktreeDiff } = await import("../server/diff");
+const { layoutCommits } = await import("../client/graph-layout");
 // Evaluates defineRpc, which validates RPC names the same way the daemon does at load.
 await import("../shared/diff");
 
@@ -54,6 +55,11 @@ try {
   commit(root, "edit readme");
   unlinkSync(path.join(root, "old.txt"));
   commit(root, "remove old");
+  git(root, "checkout", "-q", "-b", "topic", "HEAD~2");
+  write(path.join(root, "topic.txt"), "side\n");
+  commit(root, "topic work");
+  git(root, "checkout", "-q", "feature");
+  git(root, "merge", "-q", "--no-ff", "-m", "merge topic", "topic");
   write(path.join(root, "docs/guide.md"), "a\nb\nc\nd\n");
   write(path.join(root, "notes.txt"), "todo\nlater\n");
 
@@ -83,11 +89,12 @@ try {
   const rootDiff = repos.find((repo) => repo.name === "root")!;
   const byPath = new Map(rootDiff.files.map((file) => [file.path, file]));
   check("root base and branch", rootDiff.base === "main" && rootDiff.branch === "feature" && rootDiff.error === null, `${rootDiff.base} ${rootDiff.branch} ${rootDiff.error}`);
-  check("root collapses commits + uncommitted into one result", rootDiff.files.length === 4 && rootDiff.additions === 7 && rootDiff.deletions === 3, `files=${rootDiff.files.length} +${rootDiff.additions} -${rootDiff.deletions}`);
+  check("root collapses commits + uncommitted into one result", rootDiff.files.length === 5 && rootDiff.additions === 8 && rootDiff.deletions === 3, `files=${rootDiff.files.length} +${rootDiff.additions} -${rootDiff.deletions}`);
   check("committed then edited file", byPath.get("docs/guide.md")?.status === "A" && byPath.get("docs/guide.md")?.additions === 4, JSON.stringify(byPath.get("docs/guide.md")));
   check("modified file", byPath.get("README.md")?.status === "M" && byPath.get("README.md")?.additions === 1 && byPath.get("README.md")?.deletions === 1);
   check("deleted file", byPath.get("old.txt")?.status === "D" && byPath.get("old.txt")?.deletions === 2);
   check("untracked file", byPath.get("notes.txt")?.status === "untracked" && byPath.get("notes.txt")?.additions === 2);
+  check("merged side-branch file", byPath.get("topic.txt")?.status === "A" && byPath.get("topic.txt")?.additions === 1);
   check("nested repos excluded from root", !rootDiff.files.some((file) => file.path.startsWith("svc-a") || file.path.startsWith("libs/")));
 
   const svcADiff = repos.find((repo) => repo.name === "svc-a")!;
@@ -112,6 +119,26 @@ try {
     rejected = true;
   }
   check("repository outside the workspace rejected", rejected);
+
+  const { repos: commitRepos } = await readWorktreeCommits({ root });
+  const rootCommits = commitRepos.find((repo) => repo.name === "root")!;
+  const subjects = rootCommits.commits.map((c) => c.subject);
+  check("root commits since base", rootCommits.error === null && rootCommits.commits.length === 5 && rootCommits.more === 0, subjects.join(" | "));
+  check("topo order: merge first", subjects[0] === "merge topic");
+  check("all branch commits listed", ["add guide", "edit readme", "remove old", "topic work"].every((s) => subjects.includes(s)));
+  const merge = rootCommits.commits[0]!;
+  check("merge keeps both in-range parents", merge.parents.length === 2 && merge.parents.every((p) => rootCommits.commits.some((c) => c.hash === p)));
+  const oldest = rootCommits.commits.find((c) => c.subject === "add guide")!;
+  check("parents outside the range are dropped", oldest.parents.length === 0);
+  check("commit fields", merge.shortHash === merge.hash.slice(0, 7) && merge.author === "test" && !Number.isNaN(Date.parse(merge.date)));
+  check("root dirty (uncommitted + untracked)", rootCommits.dirty === true);
+  const svcACommits = commitRepos.find((repo) => repo.name === "svc-a")!;
+  check("nested repo commits", svcACommits.commits.length === 1 && svcACommits.commits[0]!.subject === "rename" && svcACommits.base === "origin/main", JSON.stringify(svcACommits.commits.map((c) => c.subject)));
+  check("nested repo clean", svcACommits.dirty === false);
+  const svcBCommits = commitRepos.find((repo) => repo.name === "libs/svc-b")!;
+  check("no commits since base", svcBCommits.error === null && svcBCommits.commits.length === 0 && svcBCommits.dirty === false);
+  const graph = layoutCommits([{ hash: "__worktree__", parents: [merge.hash] }, ...rootCommits.commits]);
+  check("graph: merge opens a second lane", graph.laneCount === 2 && graph.rows[1]!.isMerge, `lanes=${graph.laneCount}`);
 
   const statusAfter = [root, svcA, path.join(root, "libs/svc-b")].map((dir) => git(dir, "status", "--porcelain", "-uall"));
   check("read-only: git status unchanged", statusBefore.join() === statusAfter.join());

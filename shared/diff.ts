@@ -43,3 +43,38 @@ export const filePatchRpc = defineRpc({
   input: z.object({ root: z.string(), repoPath: z.string(), path: z.string() }),
   output: z.object({ patch: z.string(), truncated: z.boolean(), binary: z.boolean() }),
 });
+
+export const commitSchema = z.object({
+  hash: z.string(),
+  shortHash: z.string(),
+  /** Only parents inside the merge-base..HEAD range, so graph lanes end at the base. */
+  parents: z.array(z.string()),
+  subject: z.string(),
+  author: z.string(),
+  /** ISO 8601 author date. */
+  date: z.string(),
+});
+
+export const repoCommitsSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  kind: z.enum(["root", "nested"]),
+  branch: z.string().nullable(),
+  base: z.string().nullable(),
+  mergeBase: z.string().nullable(),
+  /** Uncommitted or untracked changes outside nested repositories. */
+  dirty: z.boolean(),
+  commits: z.array(commitSchema),
+  /** Commits in the range beyond the returned cap. */
+  more: z.number(),
+  error: z.string().nullable(),
+});
+
+export type Commit = z.infer<typeof commitSchema>;
+export type RepoCommits = z.infer<typeof repoCommitsSchema>;
+
+export const commitsRpc = defineRpc({
+  name: "nesteddiff.commits",
+  input: z.object({ root: z.string() }),
+  output: z.object({ root: z.string(), repos: z.array(repoCommitsSchema) }),
+});

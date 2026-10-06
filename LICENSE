@@ -1,7 +1,7 @@
 MIT License
 
 Copyright (c) 2026 hongmono
-Copyright (c) 2026 phucth102 (nested repository detection adapted from https://github.com/phucth102/paseo-git-graph)
+Copyright (c) 2026 phucth102 (nested repository detection and commit graph lane layout adapted from https://github.com/phucth102/paseo-git-graph)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

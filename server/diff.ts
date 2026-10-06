@@ -4,12 +4,13 @@ import { open, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { RpcInput, RpcOutput } from "@getpaseo/plugin";
-import type { DiffFile, RepoDiff, filePatchRpc, worktreeDiffRpc } from "../shared/diff";
+import type { Commit, DiffFile, RepoCommits, RepoDiff, commitsRpc, filePatchRpc, worktreeDiffRpc } from "../shared/diff";
 
 const execFileAsync = promisify(execFile);
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 const MAX_PATCH_LINES = 4000;
+const MAX_COMMITS = 200;
 const BASE_CANDIDATES = ["origin/main", "main"];
 const NESTED_REPO_MAX_DEPTH = 2;
 const NESTED_REPO_SKIP = new Set([
@@ -301,4 +302,72 @@ export async function readFilePatch({
   const paths = entry.oldPath ? [entry.oldPath, entry.path] : [entry.path];
   const patch = await git(repo.path, ["diff", ...DIFF_FLAGS, diff.mergeBase, "--", ...paths]);
   return { ...truncate(patch), binary };
+}
+
+const LOG_FORMAT = "--format=%H%x00%P%x00%an%x00%aI%x00%s%x1e";
+
+async function isDirty(repoPath: string, excluded: string[]): Promise<boolean> {
+  const status = await git(repoPath, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"]);
+  return status
+    .split("\0")
+    .filter((record) => record.length > 3)
+    .some((record) => !isUnder(record.slice(3).replace(/\/$/, ""), excluded));
+}
+
+async function readRepoCommits(repo: RepoRef): Promise<RepoCommits> {
+  const branchRaw = (await gitOrNull(repo.path, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() ?? null;
+  const branch = branchRaw && branchRaw !== "HEAD" ? branchRaw : branchRaw === "HEAD" ? "(detached)" : null;
+  const result: RepoCommits = {
+    path: repo.path,
+    name: repo.name,
+    kind: repo.kind,
+    branch,
+    base: null,
+    mergeBase: null,
+    dirty: false,
+    commits: [],
+    more: 0,
+    error: null,
+  };
+  try {
+    result.dirty = await isDirty(repo.path, repo.nested);
+  } catch (error) {
+    return { ...result, error: (error as Error).message };
+  }
+  const base = await resolveBase(repo.path);
+  if (!base) return { ...result, error: "No origin/main or main branch to compare against." };
+  const mergeBase = (await gitOrNull(repo.path, ["merge-base", "HEAD", base]))?.trim();
+  if (!mergeBase) return { ...result, base, error: `No merge-base between HEAD and ${base}.` };
+  try {
+    const range = `${mergeBase}..HEAD`;
+    const [log, count] = await Promise.all([
+      git(repo.path, ["log", "--topo-order", "--no-color", `--max-count=${MAX_COMMITS}`, LOG_FORMAT, range]),
+      git(repo.path, ["rev-list", "--count", range]),
+    ]);
+    const parsed = log
+      .split("\x1e")
+      .map((record) => record.replace(/^\n/, ""))
+      .filter(Boolean)
+      .map((record) => {
+        const [hash = "", parents = "", author = "", date = "", subject = ""] = record.split("\0");
+        return { hash, parents: parents.split(" ").filter(Boolean), author, date, subject };
+      });
+    const inRange = new Set(parsed.map((commit) => commit.hash));
+    const commits: Commit[] = parsed.map((commit) => ({
+      ...commit,
+      shortHash: commit.hash.slice(0, 7),
+      parents: commit.parents.filter((parent) => inRange.has(parent)),
+    }));
+    const total = Number.parseInt(count.trim(), 10) || commits.length;
+    return { ...result, base, mergeBase, commits, more: Math.max(0, total - commits.length) };
+  } catch (error) {
+    return { ...result, base, mergeBase, error: (error as Error).message };
+  }
+}
+
+export async function readWorktreeCommits({
+  root,
+}: RpcInput<typeof commitsRpc>): Promise<RpcOutput<typeof commitsRpc>> {
+  const repos = await listRepos(root);
+  return { root, repos: await Promise.all(repos.map(readRepoCommits)) };
 }

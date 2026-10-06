@@ -4,6 +4,30 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { type DiffFile, type RepoDiff, filePatchRpc, worktreeDiffRpc } from "../shared/diff";
+import { CommitsBody } from "./commits";
+
+type Mode = "diff" | "commits";
+
+function ModeToggle({ theme, mode, onChange }: { theme: PluginTheme; mode: Mode; onChange: (mode: Mode) => void }) {
+  return (
+    <View style={{ flexDirection: "row", alignSelf: "flex-start", borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, overflow: "hidden" }}>
+      {(["diff", "commits"] as const).map((value) => (
+        <Pressable
+          key={value}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === value }}
+          accessibilityLabel={value === "diff" ? "Show diff" : "Show commits"}
+          onPress={() => onChange(value)}
+          style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: mode === value ? theme.colors.surface2 : "transparent" }}
+        >
+          <Text style={{ color: mode === value ? theme.colors.foreground : theme.colors.foregroundMuted, fontSize: 13 }}>
+            {value === "diff" ? "Diff" : "Commits"}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 const MONOSPACE = Platform.select({ ios: "Menlo", macos: "Menlo", default: "monospace" });
 const QUERY_ROOT = "nested-diff";
@@ -154,6 +178,7 @@ export function DiffView({
   directory,
 }: Pick<PluginWorkspacePanelProps, "theme" | "layout"> & { directory: string | null }) {
   const [wrap, setWrap] = useState(false);
+  const [mode, setMode] = useState<Mode>("diff");
   const [width, setWidth] = useState(0);
   const compact = layout.compact || (width > 0 && width < NARROW_WIDTH);
   const callSummary = useRpc(worktreeDiffRpc);
@@ -194,15 +219,17 @@ export function DiffView({
             {summary.data ? <Counts theme={theme} additions={totals.additions} deletions={totals.deletions} /> : "merge-base → working tree"}
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: wrap }}
-          accessibilityLabel="Wrap long lines"
-          onPress={() => setWrap((value) => !value)}
-          style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: wrap ? theme.colors.accent : theme.colors.border }}
-        >
-          <Text style={{ color: wrap ? theme.colors.accent : theme.colors.foregroundMuted, fontSize: 13 }}>Wrap</Text>
-        </Pressable>
+        {mode === "diff" ? (
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: wrap }}
+            accessibilityLabel="Wrap long lines"
+            onPress={() => setWrap((value) => !value)}
+            style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: wrap ? theme.colors.accent : theme.colors.border }}
+          >
+            <Text style={{ color: wrap ? theme.colors.accent : theme.colors.foregroundMuted, fontSize: 13 }}>Wrap</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Refresh diff"
@@ -213,13 +240,17 @@ export function DiffView({
           <Text style={{ color: theme.colors.accentForeground, fontSize: 13 }}>{summary.isFetching ? "Loading…" : "Refresh"}</Text>
         </Pressable>
       </View>
+      <View style={{ paddingHorizontal: padding, paddingTop: 8 }}>
+        <ModeToggle theme={theme} mode={mode} onChange={setMode} />
+      </View>
       <ScrollView directionalLockEnabled nestedScrollEnabled contentContainerStyle={{ padding, gap: compact ? 10 : 12 }}>
         {!directory ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading workspace…</Text> : null}
-        {summary.error ? <Text style={{ color: theme.colors.statusDanger }}>{summary.error.message}</Text> : null}
-        {summary.data && summary.data.repos.length === 0 ? (
+        {mode === "commits" ? <CommitsBody theme={theme} compact={compact} directory={directory} /> : null}
+        {mode === "commits" ? null : summary.error ? <Text style={{ color: theme.colors.statusDanger }}>{summary.error.message}</Text> : null}
+        {mode === "diff" && summary.data && summary.data.repos.length === 0 ? (
           <Text style={{ color: theme.colors.foregroundMuted }}>This workspace is not inside a git repository.</Text>
         ) : null}
-        {summary.data?.repos.map((repo) => (
+        {mode === "commits" ? null : summary.data?.repos.map((repo) => (
           <RepoSection key={repo.path} theme={theme} compact={compact} wrap={wrap} root={summary.data.root} repo={repo} />
         ))}
       </ScrollView>

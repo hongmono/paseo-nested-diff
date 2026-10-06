@@ -16,6 +16,12 @@ However many commits a branch has, you see one result — committed, uncommitted
 - Refresh button; works in narrow/phone layouts.
 - **Read-only**: it only runs `git rev-parse`, `merge-base`, `diff` and `ls-files` (with `GIT_OPTIONAL_LOCKS=0`). It never writes to your repositories.
 
+## Commits
+
+Switch **Diff | Commits** at the top of the view to see the commits on this branch since the base, per repository (the workspace repo and each nested repo). Each repo shows a compact graph with lanes for merges, then subject, short hash, author and relative date, capped at 200 commits with an "older commits" count. If the repo has uncommitted or untracked changes, an **Uncommitted changes** row sits on top.
+
+The commit list is read-only and not interactive: rows cannot be pressed. It is there to show the shape of the branch; the Diff view stays the place to read changes.
+
 ## How the base is chosen
 
 For each repository separately: `origin/main` if it exists, otherwise `main`. The diff is `git merge-base HEAD <base>` → working tree. A repository with neither ref shows an error row instead of a diff.
